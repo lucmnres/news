@@ -11,7 +11,7 @@ import { deleteResource } from "@/lib/actions"
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const resource = db.getResource(id)
+  const resource = await db.getResource(id)
   return { title: resource ? `${resource.title} — Knowledge Portal` : "Not Found" }
 }
 
@@ -24,11 +24,13 @@ export default async function ResourcePage({
   const session = await auth()
   const userId = session?.user?.id ?? ""
 
-  const resource = db.getResource(id)
+  const [resource, resourceComments, allUpvotes] = await Promise.all([
+    db.getResource(id),
+    db.getComments(id),
+    db.getAllUpvotes(),
+  ])
   if (!resource) notFound()
 
-  const resourceComments = db.getComments(id)
-  const allUpvotes = db.getAllUpvotes()
   const hasVoted = allUpvotes.some((u) => u.resourceId === id && u.userId === userId)
   const isAuthor = resource.authorId === userId
   const Icon = resource.type === "link" ? ExternalLink : FileText

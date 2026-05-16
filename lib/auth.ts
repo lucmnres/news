@@ -1,30 +1,22 @@
 import NextAuth from "next-auth"
 import type { NextAuthConfig } from "next-auth"
+import Google from "next-auth/providers/google"
 
 export const authConfig: NextAuthConfig = {
   providers: [
-    {
-      id: "botpress",
-      name: "Botpress SSO",
-      type: "oidc",
-      issuer: process.env.AUTH_BOTPRESS_ISSUER,
-      clientId: process.env.AUTH_BOTPRESS_ID,
-      clientSecret: process.env.AUTH_BOTPRESS_SECRET,
-      profile(profile) {
-        return {
-          id: profile.sub as string,
-          name: (profile.name ?? profile.preferred_username ?? profile.email) as string,
-          email: profile.email as string,
-          image: (profile.picture ?? null) as string | null,
-        }
-      },
-    },
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+    }),
   ],
   callbacks: {
+    signIn({ profile }) {
+      return profile?.email?.endsWith("@botpress.com") ?? false
+    },
     jwt({ token, profile }) {
       if (profile) {
         token.sub = profile.sub as string
-        token.name = (profile.name ?? profile.preferred_username ?? profile.email) as string
+        token.name = (profile.name ?? profile.email) as string
       }
       return token
     },

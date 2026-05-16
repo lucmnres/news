@@ -47,7 +47,7 @@ export async function createResource(formData: FormData) {
     ? parsed.tags.split(",").map((t) => t.trim()).filter(Boolean)
     : []
 
-  db.createResource({
+  await db.createResource({
     authorId: user.id!,
     authorName: user.name ?? user.email ?? "Unknown",
     type: parsed.type,
@@ -63,12 +63,12 @@ export async function createResource(formData: FormData) {
 
 export async function deleteResource(id: string) {
   const user = await requireAuth()
-  const resource = db.getResource(id)
+  const resource = await db.getResource(id)
 
   if (!resource) throw new Error("Not found")
   if (resource.authorId !== user.id) throw new Error("Forbidden")
 
-  db.deleteResource(id)
+  await db.deleteResource(id)
   revalidatePath("/")
   redirect("/")
 }
@@ -78,7 +78,7 @@ export async function addComment(resourceId: string, body: string) {
 
   if (!body.trim() || body.length > 1000) throw new Error("Invalid comment")
 
-  db.addComment({
+  await db.addComment({
     resourceId,
     authorId: user.id!,
     authorName: user.name ?? user.email ?? "Unknown",
@@ -90,19 +90,19 @@ export async function addComment(resourceId: string, body: string) {
 
 export async function deleteComment(commentId: string, resourceId: string) {
   const user = await requireAuth()
-  const comments = db.getComments(resourceId)
+  const comments = await db.getComments(resourceId)
   const comment = comments.find((c) => c.id === commentId)
 
   if (!comment) throw new Error("Not found")
   if (comment.authorId !== user.id) throw new Error("Forbidden")
 
-  db.deleteComment(commentId)
+  await db.deleteComment(commentId)
   revalidatePath(`/r/${resourceId}`)
 }
 
 export async function toggleUpvote(resourceId: string) {
   const user = await requireAuth()
-  db.toggleUpvote(resourceId, user.id!)
+  await db.toggleUpvote(resourceId, user.id!)
   revalidatePath(`/r/${resourceId}`)
   revalidatePath("/")
 }

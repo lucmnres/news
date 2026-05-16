@@ -23,9 +23,11 @@ export default async function FeedPage({
   const session = await auth()
   const userId = session?.user?.id ?? ""
 
-  const allResources = db.getResources()
-  const allComments = db.getAllComments()
-  const allUpvotes = db.getAllUpvotes()
+  const [allResources, allComments, allUpvotes] = await Promise.all([
+    db.getResources(),
+    db.getAllComments(),
+    db.getAllUpvotes(),
+  ])
 
   const allTags = Array.from(new Set(allResources.flatMap((r) => r.tags))).sort()
 
