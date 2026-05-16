@@ -2,6 +2,8 @@ import { Client } from "@botpress/client"
 import { randomUUID } from "crypto"
 import type { Resource, Comment } from "./schema"
 
+// Tables are created and synced by the ADK bot (adk deploy / adk dev).
+// This client only reads and writes rows.
 const client = new Client({
   token: process.env.BOTPRESS_TOKEN,
   workspaceId: process.env.BOTPRESS_WORKSPACE_ID,
@@ -9,62 +11,6 @@ const client = new Client({
 })
 
 type BpRow = { id: number; [key: string]: any }
-
-// Lazy-initialize tables once per server process
-let initPromise: Promise<void> | null = null
-function init(): Promise<void> {
-  if (!initPromise) initPromise = setup()
-  return initPromise
-}
-
-async function setup() {
-  await Promise.all([
-    client.getOrCreateTable({
-      table: "resources",
-      keyColumn: "uid",
-      schema: {
-        type: "object",
-        properties: {
-          uid: { type: "string" },
-          authorId: { type: "string" },
-          authorName: { type: "string" },
-          type: { type: "string" },
-          title: { type: "string" },
-          url: { type: "string" },
-          note: { type: "string" },
-          tags: { type: "string" },
-          upvotes: { type: "number" },
-          createdAt: { type: "string" },
-        },
-      },
-    }),
-    client.getOrCreateTable({
-      table: "comments",
-      keyColumn: "uid",
-      schema: {
-        type: "object",
-        properties: {
-          uid: { type: "string" },
-          resourceId: { type: "string" },
-          authorId: { type: "string" },
-          authorName: { type: "string" },
-          body: { type: "string" },
-          createdAt: { type: "string" },
-        },
-      },
-    }),
-    client.getOrCreateTable({
-      table: "upvotes",
-      schema: {
-        type: "object",
-        properties: {
-          resourceId: { type: "string" },
-          userId: { type: "string" },
-        },
-      },
-    }),
-  ])
-}
 
 const toResource = (row: BpRow): Resource => ({
   id: row.uid as string,
@@ -90,30 +36,26 @@ const toComment = (row: BpRow): Comment => ({
 
 export const db = {
   async getResources(): Promise<Resource[]> {
-    await init()
-    const { rows } = await client.findTableRows({ table: "resources" })
+    const { rows } = await client.findTableRows({ table: "ResourcesTable" })
     return rows.map(toResource).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   },
 
   async getResource(id: string): Promise<Resource | undefined> {
-    await init()
     const { rows } = await client.findTableRows({
-      table: "resources",
+      table: "ResourcesTable",
       filter: { uid: { $eq: id } },
     })
     return rows[0] ? toResource(rows[0]) : undefined
   },
 
   async getAllComments(): Promise<Comment[]> {
-    await init()
-    const { rows } = await client.findTableRows({ table: "comments" })
+    const { rows } = await client.findTableRows({ table: "CommentsTable" })
     return rows.map(toComment)
   },
 
   async getComments(resourceId: string): Promise<Comment[]> {
-    await init()
     const { rows } = await client.findTableRows({
-      table: "comments",
+      table: "CommentsTable",
       filter: { resourceId: { $eq: resourceId } },
     })
     return rows
@@ -122,8 +64,7 @@ export const db = {
   },
 
   async getAllUpvotes(): Promise<Array<{ resourceId: string; userId: string }>> {
-    await init()
-    const { rows } = await client.findTableRows({ table: "upvotes" })
+    const { rows } = await client.findTableRows({ table: "UpvotesTable" })
     return rows.map((r) => ({
       resourceId: r.resourceId as string,
       userId: r.userId as string,
@@ -131,60 +72,55 @@ export const db = {
   },
 
   async createResource(data: Omit<Resource, "id" | "upvotes" | "createdAt">): Promise<Resource> {
-    await init()
     const uid = randomUUID()
     await client.createTableRows({
-      table: "resources",
+      table: "ResourcesTable",
       rows: [{ uid, ...data, tags: data.tags.join(","), upvotes: 0, createdAt: new Date().toISOString() }],
     })
     return { ...data, id: uid, upvotes: 0, createdAt: new Date() }
   },
 
   async deleteResource(id: string): Promise<void> {
-    await init()
     const { rows } = await client.findTableRows({
-      table: "resources",
+      table: "ResourcesTable",
       filter: { uid: { $eq: id } },
     })
     if (rows[0]) {
-      await client.deleteTableRows({ table: "resources", ids: [rows[0].id] })
+      await client.deleteTableRows({ table: "ResourcesTable", ids: [rows[0].id] })
     }
     await Promise.all([
-      client.deleteTableRows({ table: "comments", filter: { resourceId: { $eq: id } } }),
-      client.deleteTableRows({ table: "upvotes", filter: { resourceId: { $eq: id } } }),
+      client.deleteTableRows({ table: "CommentsTable", filter: { resourceId: { $eq: id } } }),
+      client.deleteTableRows({ table: "UpvotesTable", filter: { resourceId: { $eq: id } } }),
     ])
   },
 
   async addComment(data: Omit<Comment, "id" | "createdAt">): Promise<Comment> {
-    await init()
     const uid = randomUUID()
     await client.createTableRows({
-      table: "comments",
+      table: "CommentsTable",
       rows: [{ uid, ...data, createdAt: new Date().toISOString() }],
     })
     return { ...data, id: uid, createdAt: new Date() }
   },
 
   async deleteComment(id: string): Promise<void> {
-    await init()
     const { rows } = await client.findTableRows({
-      table: "comments",
+      table: "CommentsTable",
       filter: { uid: { $eq: id } },
     })
     if (rows[0]) {
-      await client.deleteTableRows({ table: "comments", ids: [rows[0].id] })
+      await client.deleteTableRows({ table: "CommentsTable", ids: [rows[0].id] })
     }
   },
 
   async toggleUpvote(resourceId: string, userId: string): Promise<void> {
-    await init()
     const [{ rows: upvoteRows }, { rows: resourceRows }] = await Promise.all([
       client.findTableRows({
-        table: "upvotes",
+        table: "UpvotesTable",
         filter: { $and: [{ resourceId: { $eq: resourceId } }, { userId: { $eq: userId } }] },
       }),
       client.findTableRows({
-        table: "resources",
+        table: "ResourcesTable",
         filter: { uid: { $eq: resourceId } },
       }),
     ])
@@ -194,17 +130,17 @@ export const db = {
 
     if (upvoteRows[0]) {
       await Promise.all([
-        client.deleteTableRows({ table: "upvotes", ids: [upvoteRows[0].id] }),
+        client.deleteTableRows({ table: "UpvotesTable", ids: [upvoteRows[0].id] }),
         client.updateTableRows({
-          table: "resources",
+          table: "ResourcesTable",
           rows: [{ id: resourceRows[0].id, upvotes: Math.max(0, currentUpvotes - 1) }],
         }),
       ])
     } else {
       await Promise.all([
-        client.createTableRows({ table: "upvotes", rows: [{ resourceId, userId }] }),
+        client.createTableRows({ table: "UpvotesTable", rows: [{ resourceId, userId }] }),
         client.updateTableRows({
-          table: "resources",
+          table: "ResourcesTable",
           rows: [{ id: resourceRows[0].id, upvotes: currentUpvotes + 1 }],
         }),
       ])

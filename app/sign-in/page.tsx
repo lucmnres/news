@@ -17,14 +17,14 @@ export default function SignInPage() {
       <form
         action={async () => {
           "use server"
-          await signIn("botpress", { redirectTo: "/" })
+          await signIn("google", { redirectTo: "/" })
         }}
       >
         <button
           type="submit"
           className="rounded-button bg-off-black px-8 py-4 text-[15px] text-paper-canvas transition-opacity hover:opacity-80"
         >
-          Sign in with Botpress SSO
+          Sign in with Google
         </button>
       </form>
     </div>
