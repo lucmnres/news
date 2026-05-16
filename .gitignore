@@ -16,6 +16,9 @@ build/
 # Drizzle
 db/migrations/
 
+# Local data store
+db/data.json
+
 # TypeScript
 tsconfig.tsbuildinfo
 

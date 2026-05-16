@@ -1,7 +1,5 @@
 import { Suspense } from "react"
-import { desc, asc, sql, eq } from "drizzle-orm"
 import { db } from "@/db"
-import { resources, comments, upvotes } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { ResourceCard } from "@/components/ResourceCard"
 import { FeedFilters } from "@/components/FeedFilters"
@@ -25,35 +23,25 @@ export default async function FeedPage({
   const session = await auth()
   const userId = session?.user?.id ?? ""
 
-  const allResourceRows = await db
-    .select({ tags: resources.tags })
-    .from(resources)
+  const allResources = db.getResources()
+  const allComments = db.getAllComments()
+  const allUpvotes = db.getAllUpvotes()
 
-  const allTags = Array.from(
-    new Set(allResourceRows.flatMap((r) => r.tags))
-  ).sort()
+  const allTags = Array.from(new Set(allResources.flatMap((r) => r.tags))).sort()
 
-  const query = db
-    .select({
-      resource: resources,
-      commentCount: sql<number>`count(distinct ${comments.id})`.as("comment_count"),
-      hasVoted: sql<boolean>`bool_or(${upvotes.userId} = ${userId})`.as("has_voted"),
-    })
-    .from(resources)
-    .leftJoin(comments, eq(comments.resourceId, resources.id))
-    .leftJoin(upvotes, eq(upvotes.resourceId, resources.id))
-    .groupBy(resources.id)
+  let rows = allResources.map((resource) => ({
+    resource,
+    commentCount: allComments.filter((c) => c.resourceId === resource.id).length,
+    hasVoted: allUpvotes.some((u) => u.resourceId === resource.id && u.userId === userId),
+  }))
 
-  const rows = await query
-    .orderBy(
-      sort === "upvotes"
-        ? desc(resources.upvotes)
-        : desc(resources.createdAt)
-    )
+  rows.sort((a, b) =>
+    sort === "upvotes"
+      ? b.resource.upvotes - a.resource.upvotes
+      : b.resource.createdAt.getTime() - a.resource.createdAt.getTime()
+  )
 
-  const filtered = tag
-    ? rows.filter((r) => r.resource.tags.includes(tag))
-    : rows
+  const filtered = tag ? rows.filter((r) => r.resource.tags.includes(tag)) : rows
 
   return (
     <div className="space-y-8">
@@ -80,8 +68,8 @@ export default async function FeedPage({
             <ResourceCard
               key={resource.id}
               resource={resource}
-              commentCount={Number(commentCount)}
-              hasVoted={Boolean(hasVoted)}
+              commentCount={commentCount}
+              hasVoted={hasVoted}
             />
           ))}
         </div>

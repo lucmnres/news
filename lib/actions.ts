@@ -3,9 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { put } from "@vercel/blob"
-import { eq, and, sql } from "drizzle-orm"
 import { db } from "@/db"
-import { resources, comments, upvotes } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { z } from "zod"
 
@@ -49,7 +47,7 @@ export async function createResource(formData: FormData) {
     ? parsed.tags.split(",").map((t) => t.trim()).filter(Boolean)
     : []
 
-  await db.insert(resources).values({
+  db.createResource({
     authorId: user.id!,
     authorName: user.name ?? user.email ?? "Unknown",
     type: parsed.type,
@@ -65,15 +63,12 @@ export async function createResource(formData: FormData) {
 
 export async function deleteResource(id: string) {
   const user = await requireAuth()
-  const [resource] = await db
-    .select({ authorId: resources.authorId })
-    .from(resources)
-    .where(eq(resources.id, id))
+  const resource = db.getResource(id)
 
   if (!resource) throw new Error("Not found")
   if (resource.authorId !== user.id) throw new Error("Forbidden")
 
-  await db.delete(resources).where(eq(resources.id, id))
+  db.deleteResource(id)
   revalidatePath("/")
   redirect("/")
 }
@@ -83,7 +78,7 @@ export async function addComment(resourceId: string, body: string) {
 
   if (!body.trim() || body.length > 1000) throw new Error("Invalid comment")
 
-  await db.insert(comments).values({
+  db.addComment({
     resourceId,
     authorId: user.id!,
     authorName: user.name ?? user.email ?? "Unknown",
@@ -95,46 +90,19 @@ export async function addComment(resourceId: string, body: string) {
 
 export async function deleteComment(commentId: string, resourceId: string) {
   const user = await requireAuth()
-  const [comment] = await db
-    .select({ authorId: comments.authorId })
-    .from(comments)
-    .where(eq(comments.id, commentId))
+  const comments = db.getComments(resourceId)
+  const comment = comments.find((c) => c.id === commentId)
 
   if (!comment) throw new Error("Not found")
   if (comment.authorId !== user.id) throw new Error("Forbidden")
 
-  await db.delete(comments).where(eq(comments.id, commentId))
+  db.deleteComment(commentId)
   revalidatePath(`/r/${resourceId}`)
 }
 
 export async function toggleUpvote(resourceId: string) {
   const user = await requireAuth()
-
-  const [existing] = await db
-    .select()
-    .from(upvotes)
-    .where(
-      and(eq(upvotes.resourceId, resourceId), eq(upvotes.userId, user.id!))
-    )
-
-  if (existing) {
-    await db
-      .delete(upvotes)
-      .where(
-        and(eq(upvotes.resourceId, resourceId), eq(upvotes.userId, user.id!))
-      )
-    await db
-      .update(resources)
-      .set({ upvotes: sql`${resources.upvotes} - 1` })
-      .where(eq(resources.id, resourceId))
-  } else {
-    await db.insert(upvotes).values({ resourceId, userId: user.id! })
-    await db
-      .update(resources)
-      .set({ upvotes: sql`${resources.upvotes} + 1` })
-      .where(eq(resources.id, resourceId))
-  }
-
+  db.toggleUpvote(resourceId, user.id!)
   revalidatePath(`/r/${resourceId}`)
   revalidatePath("/")
 }

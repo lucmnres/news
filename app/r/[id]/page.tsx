@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { eq, asc } from "drizzle-orm"
 import { formatDistanceToNow } from "date-fns"
 import { ExternalLink, FileText, ArrowLeft, Trash2 } from "lucide-react"
 import { db } from "@/db"
-import { resources, comments, upvotes } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { UpvoteButton } from "@/components/UpvoteButton"
 import { CommentThread } from "@/components/CommentThread"
@@ -13,8 +11,8 @@ import { deleteResource } from "@/lib/actions"
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const [row] = await db.select({ title: resources.title }).from(resources).where(eq(resources.id, id))
-  return { title: row ? `${row.title} — Knowledge Portal` : "Not Found" }
+  const resource = db.getResource(id)
+  return { title: resource ? `${resource.title} — Knowledge Portal` : "Not Found" }
 }
 
 export default async function ResourcePage({
@@ -26,26 +24,12 @@ export default async function ResourcePage({
   const session = await auth()
   const userId = session?.user?.id ?? ""
 
-  const [resource] = await db
-    .select()
-    .from(resources)
-    .where(eq(resources.id, id))
-
+  const resource = db.getResource(id)
   if (!resource) notFound()
 
-  const [resourceComments, userUpvote] = await Promise.all([
-    db
-      .select()
-      .from(comments)
-      .where(eq(comments.resourceId, id))
-      .orderBy(asc(comments.createdAt)),
-    db
-      .select()
-      .from(upvotes)
-      .where(eq(upvotes.resourceId, id)),
-  ])
-
-  const hasVoted = userUpvote.some((u) => u.userId === userId)
+  const resourceComments = db.getComments(id)
+  const allUpvotes = db.getAllUpvotes()
+  const hasVoted = allUpvotes.some((u) => u.resourceId === id && u.userId === userId)
   const isAuthor = resource.authorId === userId
   const Icon = resource.type === "link" ? ExternalLink : FileText
 
@@ -72,9 +56,7 @@ export default async function ResourcePage({
                 <span>{resource.authorName}</span>
                 <span>·</span>
                 <span>
-                  {formatDistanceToNow(new Date(resource.createdAt), {
-                    addSuffix: true,
-                  })}
+                  {formatDistanceToNow(resource.createdAt, { addSuffix: true })}
                 </span>
               </div>
             </div>
