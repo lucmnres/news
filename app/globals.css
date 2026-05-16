@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-ink: #000000;
+  --color-paper-canvas: #f6f3f1;
+  --color-off-black: #242424;
+  --color-pale-stone: #4e4d4d;
+  --color-whisper-gray: #3d3d3d;
+  --color-atmosphere-wash: #cfdaf5;
+  --color-subtle-link: #333333;
+  --color-faint-text: #797776;
+
+  /* Fonts — CSS vars injected by next/font into <html> */
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-serif: var(--font-noto-serif), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Border Radius */
+  --radius-tag: 2000px;
+  --radius-card: 40px;
+  --radius-button: 100px;
+
+  /* Shadows */
+  --shadow-md: rgba(0, 0, 0, 0.1) 0px 0px 10px 0px;
+
+  /* Spacing extras */
+  --spacing-18: 72px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-mono);
+    background-color: var(--color-paper-canvas);
+    color: var(--color-ink);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}

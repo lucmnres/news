@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# production
+build/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# Drizzle
+db/migrations/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+
+# Vercel
+.vercel
