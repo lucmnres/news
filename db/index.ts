@@ -2,13 +2,65 @@ import { Client } from "@botpress/client"
 import { randomUUID } from "crypto"
 import type { Resource, Comment } from "./schema"
 
-// Tables are created and synced by the ADK bot (adk deploy / adk dev).
-// This client only reads and writes rows.
 const client = new Client({
+  apiUrl: process.env.BOTPRESS_API_URL,
   token: process.env.BOTPRESS_TOKEN,
   workspaceId: process.env.BOTPRESS_WORKSPACE_ID,
   botId: process.env.BOTPRESS_BOT_ID,
 })
+
+let tablesReady: Promise<void> | null = null
+
+function ensureTables(): Promise<void> {
+  if (!tablesReady) {
+    tablesReady = Promise.all([
+      client.getOrCreateTable({
+        table: "ResourcesTable",
+        schema: {
+          type: "object",
+          properties: {
+            uid: { type: "string" },
+            authorId: { type: "string" },
+            authorName: { type: "string" },
+            type: { type: "string" },
+            title: { type: "string" },
+            url: { type: "string" },
+            note: { type: "string" },
+            tags: { type: "string" },
+            upvotes: { type: "number" },
+          },
+        },
+      }),
+      client.getOrCreateTable({
+        table: "CommentsTable",
+        schema: {
+          type: "object",
+          properties: {
+            uid: { type: "string" },
+            resourceId: { type: "string" },
+            authorId: { type: "string" },
+            authorName: { type: "string" },
+            body: { type: "string" },
+          },
+        },
+      }),
+      client.getOrCreateTable({
+        table: "UpvotesTable",
+        schema: {
+          type: "object",
+          properties: {
+            resourceId: { type: "string" },
+            userId: { type: "string" },
+          },
+        },
+      }),
+    ]).then(() => {}).catch((err) => {
+      tablesReady = null
+      throw err
+    })
+  }
+  return tablesReady
+}
 
 type BpRow = { id: number; [key: string]: any }
 
@@ -36,11 +88,13 @@ const toComment = (row: BpRow): Comment => ({
 
 export const db = {
   async getResources(): Promise<Resource[]> {
+    await ensureTables()
     const { rows } = await client.findTableRows({ table: "ResourcesTable" })
     return rows.map(toResource).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   },
 
   async getResource(id: string): Promise<Resource | undefined> {
+    await ensureTables()
     const { rows } = await client.findTableRows({
       table: "ResourcesTable",
       filter: { uid: { $eq: id } },
@@ -49,11 +103,13 @@ export const db = {
   },
 
   async getAllComments(): Promise<Comment[]> {
+    await ensureTables()
     const { rows } = await client.findTableRows({ table: "CommentsTable" })
     return rows.map(toComment)
   },
 
   async getComments(resourceId: string): Promise<Comment[]> {
+    await ensureTables()
     const { rows } = await client.findTableRows({
       table: "CommentsTable",
       filter: { resourceId: { $eq: resourceId } },
@@ -64,6 +120,7 @@ export const db = {
   },
 
   async getAllUpvotes(): Promise<Array<{ resourceId: string; userId: string }>> {
+    await ensureTables()
     const { rows } = await client.findTableRows({ table: "UpvotesTable" })
     return rows.map((r) => ({
       resourceId: r.resourceId as string,
@@ -72,6 +129,7 @@ export const db = {
   },
 
   async createResource(data: Omit<Resource, "id" | "upvotes" | "createdAt">): Promise<Resource> {
+    await ensureTables()
     const uid = randomUUID()
     await client.createTableRows({
       table: "ResourcesTable",
@@ -81,6 +139,7 @@ export const db = {
   },
 
   async deleteResource(id: string): Promise<void> {
+    await ensureTables()
     const { rows } = await client.findTableRows({
       table: "ResourcesTable",
       filter: { uid: { $eq: id } },
@@ -95,6 +154,7 @@ export const db = {
   },
 
   async addComment(data: Omit<Comment, "id" | "createdAt">): Promise<Comment> {
+    await ensureTables()
     const uid = randomUUID()
     await client.createTableRows({
       table: "CommentsTable",
@@ -104,6 +164,7 @@ export const db = {
   },
 
   async deleteComment(id: string): Promise<void> {
+    await ensureTables()
     const { rows } = await client.findTableRows({
       table: "CommentsTable",
       filter: { uid: { $eq: id } },
@@ -114,6 +175,7 @@ export const db = {
   },
 
   async toggleUpvote(resourceId: string, userId: string): Promise<void> {
+    await ensureTables()
     const [{ rows: upvoteRows }, { rows: resourceRows }] = await Promise.all([
       client.findTableRows({
         table: "UpvotesTable",
